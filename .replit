@@ -1,0 +1,7 @@
+modules = ["php-8.2"]
+
+[nix]
+channel = "stable-25_05"
+
+[agent]
+expertMode = true
