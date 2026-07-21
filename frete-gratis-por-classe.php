@@ -149,8 +149,15 @@ class Frete_Gratis_Por_Classe {
         if (self::is_checkout_being_processed()) return;
 
         $notice = self::get_limite_notice();
-        if ($notice && !wc_has_notice($notice, 'error')) {
-            wc_add_notice($notice, 'error');
+        if (!$notice) return;
+
+        // No checkout, um notice "error" faz o WooCommerce esconder o formulário
+        // ("Existem alguns problemas com os itens em seu carrinho..."). Por isso,
+        // usa "error" apenas na página do carrinho e "notice" (informativo) no restante.
+        $type = (function_exists('is_cart') && is_cart()) ? 'error' : 'notice';
+
+        if (!wc_has_notice($notice, $type)) {
+            wc_add_notice($notice, $type);
         }
     }
 
