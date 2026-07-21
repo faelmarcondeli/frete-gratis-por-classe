@@ -18,15 +18,13 @@ class Frete_Gratis_Por_Classe {
         // Adicione outras classes aqui se necessário
     ];
 
-    private static $notice = '';
     private static $metodos_cache = [];
     
     public static function init() {
         add_filter('woocommerce_shipping_instance_form_fields_free_shipping', [__CLASS__, 'add_required_shipping_class_field']);
         add_filter('woocommerce_package_rates', [__CLASS__, 'filter_package_rates'], 100, 2);
         add_filter('woocommerce_cart_shipping_method_full_label', [__CLASS__, 'label_gratis'], 10, 2);
-        add_action('woocommerce_before_cart', [__CLASS__, 'show_notice']);
-        add_action('woocommerce_before_checkout_form', [__CLASS__, 'show_notice']);
+        add_action('woocommerce_check_cart_items', [__CLASS__, 'show_notice']);
 
         // Integração Flatsome
         add_filter('flatsome_shipping_free_shipping_threshold', [__CLASS__, 'flatsome_free_shipping_threshold']);
@@ -75,13 +73,6 @@ class Frete_Gratis_Por_Classe {
                 if ($rate->method_id === 'free_shipping') unset($rates[$rate_id]);
             }
 
-            $class_name = self::get_class_name($classe_prioritaria);
-            self::$notice = sprintf(
-                'Para utilizar o frete grátis, o valor dos produtos da classe "%s" não pode ultrapassar R$ %s. Atualmente: R$ %s.',
-                esc_html($class_name),
-                number_format(self::LIMITES_ESPECIAIS[$classe_prioritaria], 2, ',', '.'),
-                number_format($subtotal_prioritaria, 2, ',', '.')
-            );
             return $rates;
         }
 
@@ -126,11 +117,33 @@ class Frete_Gratis_Por_Classe {
         return $label;
     }
 
-    // Exibe aviso acumulado no carrinho ou checkout
+    // Calcula o aviso diretamente do estado do carrinho (independe do cache de fretes)
+    public static function get_limite_notice() {
+        if (!function_exists('WC') || !WC()->cart) return '';
+
+        $package = WC()->cart->get_shipping_packages()[0] ?? null;
+        if (!$package) return '';
+
+        $classes_no_carrinho = self::get_cart_shipping_classes($package);
+        $classe_prioritaria = self::get_prioritaria($classes_no_carrinho);
+        if (!$classe_prioritaria || !isset(self::LIMITES_ESPECIAIS[$classe_prioritaria])) return '';
+
+        $subtotal_prioritaria = self::subtotal_by_class($package, $classe_prioritaria);
+        if ($subtotal_prioritaria <= self::LIMITES_ESPECIAIS[$classe_prioritaria]) return '';
+
+        return sprintf(
+            'Para utilizar o frete grátis, o valor dos produtos da classe "%s" não pode ultrapassar R$ %s. Atualmente: R$ %s.',
+            esc_html(self::get_class_name($classe_prioritaria)),
+            number_format(self::LIMITES_ESPECIAIS[$classe_prioritaria], 2, ',', '.'),
+            number_format($subtotal_prioritaria, 2, ',', '.')
+        );
+    }
+
+    // Exibe aviso no carrinho ou checkout (roda em todo render, inclusive AJAX)
     public static function show_notice() {
-        if (!empty(self::$notice)) {
-            wc_add_notice(self::$notice, 'error');
-            self::$notice = '';
+        $notice = self::get_limite_notice();
+        if ($notice && !wc_has_notice($notice, 'error')) {
+            wc_add_notice($notice, 'error');
         }
     }
 
