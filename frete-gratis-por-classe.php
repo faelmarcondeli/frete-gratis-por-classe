@@ -215,8 +215,22 @@ class Frete_Gratis_Por_Classe {
     }
 
     // Imprime o marcador no rodapé (carregamento inicial da página)
+    // e o script que sincroniza os fragments nas atualizações AJAX do carrinho/checkout
     public static function output_hide_bar_style() {
         echo self::get_hide_bar_style();
+        ?>
+        <script>
+        jQuery(function($){
+            var fgpcRefreshing = false;
+            $(document.body).on('updated_wc_div updated_cart_totals updated_checkout', function(){
+                if (fgpcRefreshing) return;
+                fgpcRefreshing = true;
+                $(document.body).trigger('wc_fragment_refresh');
+                setTimeout(function(){ fgpcRefreshing = false; }, 800);
+            });
+        });
+        </script>
+        <?php
     }
 
     // Atualiza o marcador nas atualizações AJAX do carrinho (cart fragments)
