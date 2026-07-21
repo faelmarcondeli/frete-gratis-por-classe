@@ -25,6 +25,8 @@ class Frete_Gratis_Por_Classe {
         add_filter('woocommerce_package_rates', [__CLASS__, 'filter_package_rates'], 100, 2);
         add_filter('woocommerce_cart_shipping_method_full_label', [__CLASS__, 'label_gratis'], 10, 2);
         add_action('woocommerce_check_cart_items', [__CLASS__, 'show_notice']);
+        // Recalcula o aviso a cada atualização AJAX do checkout (update_order_review)
+        add_action('woocommerce_checkout_update_order_review', [__CLASS__, 'show_notice']);
 
         // Integração Flatsome
         add_filter('flatsome_shipping_free_shipping_threshold', [__CLASS__, 'flatsome_free_shipping_threshold']);
@@ -32,6 +34,7 @@ class Frete_Gratis_Por_Classe {
         // Oculta a barra .ux-free-shipping quando frete grátis for impossível (compatível com AJAX)
         add_action('wp_footer', [__CLASS__, 'output_hide_bar_style']);
         add_filter('woocommerce_add_to_cart_fragments', [__CLASS__, 'hide_bar_fragment']);
+        add_filter('woocommerce_update_order_review_fragments', [__CLASS__, 'hide_bar_fragment']);
     }
 
     // Campo no admin (Frete grátis)
@@ -221,8 +224,10 @@ class Frete_Gratis_Por_Classe {
         ?>
         <script>
         jQuery(function($){
+            // No checkout o marcador é atualizado nativamente via update_order_review_fragments.
+            // Aqui cobrimos apenas a página do carrinho, cujo AJAX não passa pelos fragments.
             var fgpcRefreshing = false;
-            $(document.body).on('updated_wc_div updated_cart_totals updated_checkout', function(){
+            $(document.body).on('updated_wc_div updated_cart_totals', function(){
                 if (fgpcRefreshing) return;
                 fgpcRefreshing = true;
                 $(document.body).trigger('wc_fragment_refresh');
