@@ -144,10 +144,28 @@ class Frete_Gratis_Por_Classe {
 
     // Exibe aviso no carrinho ou checkout (roda em todo render, inclusive AJAX)
     public static function show_notice() {
+        // Nunca adiciona o aviso durante a finalização do pedido:
+        // um notice do tipo "error" nesse momento bloquearia o checkout.
+        if (self::is_checkout_being_processed()) return;
+
         $notice = self::get_limite_notice();
         if ($notice && !wc_has_notice($notice, 'error')) {
             wc_add_notice($notice, 'error');
         }
+    }
+
+    // Detecta se o pedido está sendo finalizado (submit do checkout)
+    public static function is_checkout_being_processed() {
+        if (isset($_POST['woocommerce-process-checkout-nonce']) || isset($_POST['woocommerce_checkout_place_order'])) {
+            return true;
+        }
+        if (function_exists('wp_doing_ajax') && wp_doing_ajax() && isset($_GET['wc-ajax']) && $_GET['wc-ajax'] === 'checkout') {
+            return true;
+        }
+        if (defined('WOOCOMMERCE_CHECKOUT') && WOOCOMMERCE_CHECKOUT && isset($_POST['payment_method'])) {
+            return true;
+        }
+        return false;
     }
 
     // Integração com a barra de frete grátis do Flatsome
