@@ -30,6 +30,10 @@ class Frete_Gratis_Por_Classe {
 
         // Integração Flatsome
         add_filter('flatsome_shipping_free_shipping_threshold', [__CLASS__, 'flatsome_free_shipping_threshold']);
+
+        // Oculta a barra .ux-free-shipping quando frete grátis for impossível (compatível com AJAX)
+        add_action('wp_footer', [__CLASS__, 'output_hide_bar_style']);
+        add_filter('woocommerce_add_to_cart_fragments', [__CLASS__, 'hide_bar_fragment']);
     }
 
     // Campo no admin (Frete grátis)
@@ -155,6 +159,57 @@ class Frete_Gratis_Por_Classe {
         }
 
         return $threshold;
+    }
+
+    // Determina se a barra de frete grátis deve ser ocultada (frete grátis impossível)
+    public static function should_hide_free_shipping_bar() {
+        if (!function_exists('WC') || !WC()->cart) return false;
+
+        $package = WC()->cart->get_shipping_packages()[0] ?? null;
+        if (!$package) return false;
+
+        $classes_no_carrinho = self::get_cart_shipping_classes($package);
+        $classe_prioritaria = self::get_prioritaria($classes_no_carrinho);
+        if (!$classe_prioritaria) return false;
+
+        // Limite especial ultrapassado: frete grátis impossível, oculta a barra
+        if (isset(self::LIMITES_ESPECIAIS[$classe_prioritaria])) {
+            $subtotal_prioritaria = self::subtotal_by_class($package, $classe_prioritaria);
+            if ($subtotal_prioritaria > self::LIMITES_ESPECIAIS[$classe_prioritaria]) {
+                return true;
+            }
+        }
+
+        // Sem nenhum método de frete grátis configurado para a classe prioritária: impossível
+        $zone = wc_get_shipping_zone($package);
+        foreach ($zone->get_shipping_methods(true) as $method) {
+            if ($method->id !== 'free_shipping') continue;
+            $required_class = trim($method->get_option('required_shipping_class', ''));
+            if ($required_class === $classe_prioritaria) {
+                return false; // Existe método elegível, mantém a barra visível
+            }
+        }
+
+        return true;
+    }
+
+    // Gera o <style> marcador que controla a visibilidade da barra
+    public static function get_hide_bar_style() {
+        $css = self::should_hide_free_shipping_bar()
+            ? '.ux-free-shipping{display:none !important;}'
+            : '';
+        return '<style id="fgpc-hide-free-shipping">' . $css . '</style>';
+    }
+
+    // Imprime o marcador no rodapé (carregamento inicial da página)
+    public static function output_hide_bar_style() {
+        echo self::get_hide_bar_style();
+    }
+
+    // Atualiza o marcador nas atualizações AJAX do carrinho (cart fragments)
+    public static function hide_bar_fragment($fragments) {
+        $fragments['#fgpc-hide-free-shipping'] = self::get_hide_bar_style();
+        return $fragments;
     }
 
     // === Métodos auxiliares ===
